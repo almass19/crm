@@ -1,0 +1,31 @@
+export const STATUS_LABELS: Record<string, string> = {
+  NEW: 'Новый',
+  ASSIGNED: 'Назначен',
+  IN_WORK: 'В работе',
+  DONE: 'Завершён',
+  REJECTED: 'Отклонён',
+};
+
+export const STATUS_COLORS: Record<string, string> = {
+  NEW: 'bg-blue-100 text-blue-800',
+  ASSIGNED: 'bg-yellow-100 text-yellow-800',
+  IN_WORK: 'bg-green-100 text-green-800',
+  DONE: 'bg-gray-100 text-gray-800',
+  REJECTED: 'bg-red-100 text-red-800',
+};
+
+export const ROLE_LABELS: Record<string, string> = {
+  SALES_MANAGER: 'Менеджер по продажам',
+  PROJECT_MANAGER: 'Проект-менеджер',
+  SPECIALIST: 'Специалист',
+};
+
+export const SOURCE_OPTIONS = [
+  'Сайт',
+  'Телефон',
+  'Email',
+  'Рекомендация',
+  'Социальные сети',
+  'Реклама',
+  'Другое',
+];

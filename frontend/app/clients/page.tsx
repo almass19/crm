@@ -1,0 +1,430 @@
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
+import { api } from '@/lib/api';
+import { STATUS_LABELS } from '@/lib/constants';
+import Navbar from '@/components/Navbar';
+import StatusBadge from '@/components/StatusBadge';
+
+interface Client {
+  id: string;
+  fullName: string | null;
+  companyName: string | null;
+  phone: string;
+  email: string;
+  source: string;
+  status: string;
+  assignmentSeen: boolean;
+  createdAt: string;
+  createdBy: { fullName: string };
+  assignedTo: { fullName: string } | null;
+}
+
+export default function ClientsPage() {
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [showUnassigned, setShowUnassigned] = useState(false);
+  const [activeTab, setActiveTab] = useState<'new' | 'inwork'>('new');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  const fetchClients = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const params: Record<string, string> = {};
+      if (search) params.search = search;
+      if (statusFilter) params.status = statusFilter;
+      if (showUnassigned) params.unassigned = 'true';
+      const data = await api.getClients(params);
+      setClients(data);
+    } catch {
+      // error handled by api client
+    } finally {
+      setLoading(false);
+    }
+  }, [user, search, statusFilter, showUnassigned]);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/login');
+      return;
+    }
+    if (user) {
+      fetchClients();
+    }
+  }, [authLoading, user, fetchClients, router]);
+
+  if (authLoading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-500">Загрузка...</div>
+      </div>
+    );
+  }
+
+  const isSpecialist = user.role === 'SPECIALIST';
+  const isSalesManager = user.role === 'SALES_MANAGER';
+  const isPM = user.role === 'PROJECT_MANAGER';
+
+  const filteredClients = isSpecialist
+    ? activeTab === 'new'
+      ? clients.filter((c) => !c.assignmentSeen && c.status === 'ASSIGNED')
+      : clients.filter((c) => c.assignmentSeen || c.status === 'IN_WORK' || c.status === 'DONE')
+    : clients;
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navbar />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Клиенты</h1>
+          {isSalesManager && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              + Добавить клиента
+            </button>
+          )}
+        </div>
+
+        {isSpecialist && (
+          <div className="flex space-x-1 mb-6 bg-gray-200 rounded-lg p-1 max-w-xs">
+            <button
+              onClick={() => setActiveTab('new')}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'new'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Новые
+            </button>
+            <button
+              onClick={() => setActiveTab('inwork')}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'inwork'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              В работе
+            </button>
+          </div>
+        )}
+
+        {!isSpecialist && (
+          <div className="flex flex-wrap gap-4 mb-6">
+            <input
+              type="text"
+              placeholder="Поиск по имени, телефону, email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm min-w-[300px]"
+            />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            >
+              <option value="">Все статусы</option>
+              {Object.entries(STATUS_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            {isPM && (
+              <label className="flex items-center space-x-2 text-sm text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={showUnassigned}
+                  onChange={(e) => setShowUnassigned(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                <span>Только без специалиста</span>
+              </label>
+            )}
+            <button
+              onClick={fetchClients}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors text-sm"
+            >
+              Обновить
+            </button>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="text-center py-12 text-gray-500">Загрузка...</div>
+        ) : filteredClients.length === 0 ? (
+          <div className="text-center py-12 text-gray-500">
+            {isSpecialist && activeTab === 'new'
+              ? 'Нет новых клиентов'
+              : 'Клиенты не найдены'}
+          </div>
+        ) : (
+          <div className="bg-white shadow-sm rounded-lg overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Имя / Компания
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Контакты
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Источник
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Статус
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Специалист
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Дата
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredClients.map((client) => (
+                  <tr
+                    key={client.id}
+                    onClick={() => router.push(`/clients/${client.id}`)}
+                    className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {client.fullName || client.companyName}
+                      </div>
+                      {client.fullName && client.companyName && (
+                        <div className="text-xs text-gray-500">
+                          {client.companyName}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <div>{client.phone}</div>
+                      <div className="text-xs">{client.email}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {client.source}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <StatusBadge status={client.status} />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {client.assignedTo?.fullName || '—'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(client.createdAt).toLocaleDateString('ru-RU')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {showCreateModal && (
+        <CreateClientModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={() => {
+            setShowCreateModal(false);
+            fetchClients();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function CreateClientModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [form, setForm] = useState({
+    fullName: '',
+    companyName: '',
+    phone: '',
+    email: '',
+    source: '',
+    notes: '',
+  });
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.fullName && !form.companyName) {
+      setError('Укажите ФИО или название компании');
+      return;
+    }
+    setError('');
+    setSubmitting(true);
+    try {
+      const data: Record<string, string> = {};
+      if (form.fullName) data.fullName = form.fullName;
+      if (form.companyName) data.companyName = form.companyName;
+      data.phone = form.phone;
+      data.email = form.email;
+      data.source = form.source;
+      if (form.notes) data.notes = form.notes;
+      await api.createClient(data);
+      onCreated();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Ошибка создания');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-bold text-gray-900">
+              Новый клиент
+            </h2>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              ✕
+            </button>
+          </div>
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ФИО
+              </label>
+              <input
+                type="text"
+                value={form.fullName}
+                onChange={(e) =>
+                  setForm({ ...form, fullName: e.target.value })
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Иванов Иван Иванович"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Название компании
+              </label>
+              <input
+                type="text"
+                value={form.companyName}
+                onChange={(e) =>
+                  setForm({ ...form, companyName: e.target.value })
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="ООО 'Компания'"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Телефон *
+              </label>
+              <input
+                type="tel"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="+7 (999) 123-45-67"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email *
+              </label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="client@example.com"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Источник *
+              </label>
+              <select
+                value={form.source}
+                onChange={(e) => setForm({ ...form, source: e.target.value })}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Выберите источник</option>
+                <option value="Сайт">Сайт</option>
+                <option value="Телефон">Телефон</option>
+                <option value="Email">Email</option>
+                <option value="Рекомендация">Рекомендация</option>
+                <option value="Социальные сети">Социальные сети</option>
+                <option value="Реклама">Реклама</option>
+                <option value="Другое">Другое</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Заметки
+              </label>
+              <textarea
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Дополнительная информация..."
+              />
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors text-sm"
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm font-medium"
+              >
+                {submitting ? 'Сохранение...' : 'Создать'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
