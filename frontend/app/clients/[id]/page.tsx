@@ -16,6 +16,7 @@ interface Client {
   email: string;
   services: string[];
   notes: string | null;
+  paymentAmount?: string | number | null;
   status: string;
   assignmentSeen: boolean;
   designerAssignmentSeen: boolean;
@@ -62,6 +63,8 @@ export default function ClientDetailPage() {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showAssignDesignerModal, setShowAssignDesignerModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
   const [error, setError] = useState('');
 
   const fetchClient = useCallback(async () => {
@@ -157,6 +160,22 @@ export default function ClientDetailPage() {
     }
   };
 
+  const handlePaymentUpdate = async () => {
+    try {
+      const amount = paymentAmount ? parseFloat(paymentAmount) : null;
+      await api.updateClient(id, { paymentAmount: amount });
+      setShowPaymentModal(false);
+      fetchClient();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Ошибка сохранения суммы');
+    }
+  };
+
+  const openPaymentModal = () => {
+    setPaymentAmount(client?.paymentAmount ? String(client.paymentAmount) : '');
+    setShowPaymentModal(true);
+  };
+
   if (authLoading || loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -174,8 +193,11 @@ export default function ClientDetailPage() {
   }
 
   const isAdmin = user.role === 'ADMIN';
+  const isSalesManager = user.role === 'SALES_MANAGER';
   const isSpecialist = user.role === 'SPECIALIST';
   const isDesigner = user.role === 'DESIGNER';
+  const canSeePayment = isAdmin || isSalesManager;
+  const canEditPayment = isSalesManager;
   const canAcknowledgeSpecialist =
     isSpecialist &&
     client.assignedTo?.id === user.id &&
@@ -263,6 +285,24 @@ export default function ClientDetailPage() {
                     {client.designer?.fullName || 'Не назначен'}
                   </p>
                 </div>
+                {canSeePayment && (
+                  <div>
+                    <span className="text-gray-500">Сумма оплаты:</span>
+                    <p className="font-medium">
+                      {client.paymentAmount
+                        ? `${Number(client.paymentAmount).toLocaleString('ru-RU')} ₸`
+                        : '—'}
+                      {canEditPayment && (
+                        <button
+                          onClick={openPaymentModal}
+                          className="ml-2 text-blue-600 hover:text-blue-800 text-xs"
+                        >
+                          Изменить
+                        </button>
+                      )}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {client.notes && (
@@ -524,6 +564,55 @@ export default function ClientDetailPage() {
                   )}
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-gray-900">
+                Сумма оплаты
+              </h2>
+              <button
+                onClick={() => setShowPaymentModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Сумма (₸)
+                </label>
+                <input
+                  type="number"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  min="0"
+                  step="0.01"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowPaymentModal(false)}
+                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={handlePaymentUpdate}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Сохранить
+                </button>
+              </div>
             </div>
           </div>
         </div>

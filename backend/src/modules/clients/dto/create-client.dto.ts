@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, IsArray, ArrayNotEmpty, Matches } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, IsArray, ArrayNotEmpty, Matches, IsNumber, Min } from 'class-validator';
 
 export class CreateClientDto {
   @IsOptional()
@@ -24,4 +24,9 @@ export class CreateClientDto {
   @IsOptional()
   @IsString({ message: 'Заметки должны быть строкой' })
   notes?: string;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'Сумма оплаты должна быть числом' })
+  @Min(0, { message: 'Сумма оплаты не может быть отрицательной' })
+  paymentAmount?: number;
 }

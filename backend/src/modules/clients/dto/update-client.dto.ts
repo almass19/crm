@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsOptional, IsString, IsArray, Matches } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, IsString, IsArray, Matches, IsNumber, Min } from 'class-validator';
 import { ClientStatus } from '@prisma/client';
 
 export class UpdateClientDto {
@@ -30,4 +30,9 @@ export class UpdateClientDto {
   @IsOptional()
   @IsEnum(ClientStatus, { message: 'Некорректный статус' })
   status?: ClientStatus;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'Сумма оплаты должна быть числом' })
+  @Min(0, { message: 'Сумма оплаты не может быть отрицательной' })
+  paymentAmount?: number;
 }

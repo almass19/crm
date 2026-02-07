@@ -23,6 +23,12 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  @Get('employees')
+  @Roles(Role.ADMIN)
+  async getEmployees() {
+    return this.usersService.findEmployees();
+  }
+
   @Patch(':id/role')
   @Roles(Role.ADMIN)
   async updateRole(

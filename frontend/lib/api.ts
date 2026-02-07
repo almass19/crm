@@ -86,4 +86,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ content }),
     }),
+
+  // Dashboard
+  getMyDashboard: (year: number, month: number) =>
+    request(`/dashboard/my?year=${year}&month=${month}`),
+
+  getUserDashboard: (userId: string, year: number, month: number) =>
+    request(`/dashboard/user/${userId}?year=${year}&month=${month}`),
+
+  // Employees (for admin dashboard)
+  getEmployees: () => request('/users/employees'),
 };

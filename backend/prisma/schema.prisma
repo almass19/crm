@@ -49,9 +49,10 @@ model Client {
   companyName String?      @map("company_name")
   phone       String
   email       String
-  services    String[]
-  notes       String?
-  status      ClientStatus @default(NEW)
+  services      String[]
+  notes         String?
+  paymentAmount Decimal?     @map("payment_amount") @db.Decimal(12, 2)
+  status        ClientStatus @default(NEW)
   archived    Boolean      @default(false)
 
   createdById String @map("created_by_id")

@@ -292,6 +292,7 @@ function CreateClientModal({
     email: '',
     services: [] as string[],
     notes: '',
+    paymentAmount: '',
   });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -316,6 +317,7 @@ function CreateClientModal({
       data.email = form.email;
       data.services = form.services;
       if (form.notes) data.notes = form.notes;
+      if (form.paymentAmount) data.paymentAmount = parseFloat(form.paymentAmount);
       await api.createClient(data);
       onCreated();
     } catch (err: unknown) {
@@ -429,6 +431,21 @@ function CreateClientModal({
                   </label>
                 ))}
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Сумма оплаты (₸)
+              </label>
+              <input
+                type="number"
+                value={form.paymentAmount}
+                onChange={(e) => setForm({ ...form, paymentAmount: e.target.value })}
+                min="0"
+                step="0.01"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="0.00"
+              />
             </div>
 
             <div>

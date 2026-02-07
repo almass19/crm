@@ -23,13 +23,29 @@ export default function Navbar() {
             >
               Клиенты
             </Link>
-            {user.role === 'ADMIN' && (
+            {['SPECIALIST', 'DESIGNER', 'SALES_MANAGER'].includes(user.role || '') && (
               <Link
-                href="/users"
+                href="/dashboard"
                 className="text-gray-600 hover:text-gray-900 transition-colors"
               >
-                Пользователи
+                Мой дашборд
               </Link>
+            )}
+            {user.role === 'ADMIN' && (
+              <>
+                <Link
+                  href="/admin-dashboard"
+                  className="text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  Дашборды
+                </Link>
+                <Link
+                  href="/users"
+                  className="text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  Пользователи
+                </Link>
+              </>
             )}
           </div>
           <div className="flex items-center space-x-4">

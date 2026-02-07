@@ -31,4 +31,14 @@ export class UsersService {
       select: { id: true, email: true, fullName: true, role: true, createdAt: true },
     });
   }
+
+  async findEmployees() {
+    return this.prisma.user.findMany({
+      where: {
+        role: { in: [Role.SPECIALIST, Role.DESIGNER, Role.SALES_MANAGER] },
+      },
+      select: { id: true, email: true, fullName: true, role: true },
+      orderBy: { fullName: 'asc' },
+    });
+  }
 }

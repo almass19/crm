@@ -23,6 +23,18 @@ export class ClientsService {
     private auditService: AuditService,
   ) {}
 
+  private sanitizeClientResponse(client: any, userRole: Role | null): any {
+    if (userRole === Role.SPECIALIST || userRole === Role.DESIGNER) {
+      const { paymentAmount, ...sanitized } = client;
+      return sanitized;
+    }
+    return client;
+  }
+
+  private sanitizeClientsResponse(clients: any[], userRole: Role | null): any[] {
+    return clients.map((client) => this.sanitizeClientResponse(client, userRole));
+  }
+
   async create(dto: CreateClientDto, userId: string) {
     if (!dto.fullName && !dto.companyName) {
       throw new BadRequestException(
@@ -38,6 +50,7 @@ export class ClientsService {
         email: dto.email,
         services: dto.services,
         notes: dto.notes,
+        paymentAmount: dto.paymentAmount,
         createdById: userId,
       },
       include: clientInclude,
@@ -87,11 +100,13 @@ export class ClientsService {
       where.assignedToId = null;
     }
 
-    return this.prisma.client.findMany({
+    const clients = await this.prisma.client.findMany({
       where,
       include: clientInclude,
       orderBy: { createdAt: 'desc' },
     });
+
+    return this.sanitizeClientsResponse(clients, userRole);
   }
 
   async findById(id: string, userRole: Role | null, userId: string) {
@@ -124,7 +139,7 @@ export class ClientsService {
       throw new ForbiddenException('Нет доступа к данному клиенту');
     }
 
-    return client;
+    return this.sanitizeClientResponse(client, userRole);
   }
 
   async update(
@@ -152,6 +167,16 @@ export class ClientsService {
       );
     }
 
+    if (
+      dto.paymentAmount !== undefined &&
+      userRole !== Role.ADMIN &&
+      userRole !== Role.SALES_MANAGER
+    ) {
+      throw new ForbiddenException(
+        'Только администратор или менеджер может менять сумму оплаты',
+      );
+    }
+
     const updated = await this.prisma.client.update({
       where: { id },
       data: dto,
@@ -167,7 +192,7 @@ export class ClientsService {
       );
     }
 
-    return updated;
+    return this.sanitizeClientResponse(updated, userRole);
   }
 
   async archive(id: string, userId: string) {
@@ -284,11 +309,14 @@ export class ClientsService {
       updateData.status = ClientStatus.ASSIGNED;
     }
 
-    return this.prisma.client.update({
+    const updated = await this.prisma.client.update({
       where: { id: clientId },
       data: updateData,
       include: clientInclude,
     });
+
+    // Admin is the only one who can assign, so no need to sanitize
+    return updated;
   }
 
   async acknowledge(
