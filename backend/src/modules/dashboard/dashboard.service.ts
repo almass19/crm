@@ -71,7 +71,7 @@ export class DashboardService {
           fullName: true,
           companyName: true,
           phone: true,
-          email: true,
+          groupName: true,
           status: true,
           services: true,
           createdAt: true,

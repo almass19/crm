@@ -15,7 +15,7 @@ interface Client {
   fullName: string | null;
   companyName: string | null;
   phone: string;
-  email: string;
+  groupName: string | null;
   services: string[];
   notes: string | null;
   paymentAmount?: string | number | null;
@@ -63,6 +63,15 @@ interface UserOption {
   email: string;
 }
 
+interface Payment {
+  id: string;
+  amount: number;
+  month: string;
+  isRenewal: boolean;
+  createdAt: string;
+  manager: { id: string; fullName: string };
+}
+
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -81,6 +90,8 @@ export default function ClientDetailPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [error, setError] = useState('');
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [showAddPaymentModal, setShowAddPaymentModal] = useState(false);
 
   const fetchClient = useCallback(async () => {
     try {
@@ -99,6 +110,18 @@ export default function ClientDetailPage() {
     }
   }, [id, router]);
 
+  const fetchPayments = useCallback(async () => {
+    if (!user) return;
+    // Only Admin and Sales Manager can see payments
+    if (user.role !== 'ADMIN' && user.role !== 'SALES_MANAGER') return;
+    try {
+      const data = await api.getClientPayments(id);
+      setPayments(data);
+    } catch {
+      // Silently fail - user may not have permission
+    }
+  }, [user, id]);
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace('/login');
@@ -106,12 +129,13 @@ export default function ClientDetailPage() {
     }
     if (user) {
       fetchClient();
+      fetchPayments();
       if (user.role === 'ADMIN') {
         api.getUsers('specialist').then(setSpecialists).catch(() => {});
         api.getUsers('designer').then(setDesigners).catch(() => {});
       }
     }
-  }, [authLoading, user, fetchClient, router]);
+  }, [authLoading, user, fetchClient, fetchPayments, router]);
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
@@ -283,8 +307,8 @@ export default function ClientDetailPage() {
                   <p className="font-medium">{client.phone}</p>
                 </div>
                 <div>
-                  <span className="text-gray-500">Email:</span>
-                  <p className="font-medium">{client.email}</p>
+                  <span className="text-gray-500">Название группы:</span>
+                  <p className="font-medium">{client.groupName || '—'}</p>
                 </div>
                 <div>
                   <span className="text-gray-500">Услуги:</span>
@@ -512,6 +536,53 @@ export default function ClientDetailPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            {/* Payments - Only for Admin and Sales Manager */}
+            {(isAdmin || isSalesManager) && (
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900">Платежи</h2>
+                  <button
+                    onClick={() => setShowAddPaymentModal(true)}
+                    className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                  >
+                    + Добавить
+                  </button>
+                </div>
+                {payments.length === 0 ? (
+                  <p className="text-sm text-gray-500">Платежей пока нет</p>
+                ) : (
+                  <div className="space-y-3">
+                    {payments.map((p) => (
+                      <div key={p.id} className="text-sm border-b pb-3 last:border-0">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-medium text-gray-700">
+                              {p.amount.toLocaleString('ru-RU')} ₸
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {p.month}
+                            </p>
+                          </div>
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded ${
+                              p.isRenewal
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}
+                          >
+                            {p.isRenewal ? 'Продление' : 'Первичная'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {new Date(p.createdAt).toLocaleDateString('ru-RU')}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Assignment History */}
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
@@ -661,7 +732,7 @@ export default function ClientDetailPage() {
         </div>
       )}
 
-      {/* Payment Modal */}
+      {/* Payment Modal (for paymentAmount field on Client) */}
       {showPaymentModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
@@ -710,6 +781,157 @@ export default function ClientDetailPage() {
         </div>
       )}
 
+      {/* Add Payment Modal */}
+      {showAddPaymentModal && (
+        <AddPaymentModal
+          clientId={id}
+          onClose={() => setShowAddPaymentModal(false)}
+          onCreated={() => {
+            setShowAddPaymentModal(false);
+            fetchPayments();
+          }}
+        />
+      )}
+
+    </div>
+  );
+}
+
+function AddPaymentModal({
+  clientId,
+  onClose,
+  onCreated,
+}: {
+  clientId: string;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  const [form, setForm] = useState({
+    amount: '',
+    month: currentMonth,
+    isRenewal: false,
+  });
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.amount || parseInt(form.amount) <= 0) {
+      setError('Введите сумму платежа');
+      return;
+    }
+    if (!form.month) {
+      setError('Выберите месяц');
+      return;
+    }
+    setError('');
+    setSubmitting(true);
+    try {
+      await api.createPayment(clientId, {
+        amount: parseInt(form.amount),
+        month: form.month,
+        isRenewal: form.isRenewal,
+      });
+      onCreated();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Ошибка создания платежа');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold text-gray-900">Добавить платёж</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            ✕
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded text-sm">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Сумма (₸) *
+            </label>
+            <input
+              type="number"
+              value={form.amount}
+              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+              min="1"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="100000"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Месяц *
+            </label>
+            <input
+              type="month"
+              value={form.month}
+              onChange={(e) => setForm({ ...form, month: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Тип платежа *
+            </label>
+            <div className="flex space-x-4">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="paymentType"
+                  checked={!form.isRenewal}
+                  onChange={() => setForm({ ...form, isRenewal: false })}
+                  className="text-blue-600"
+                />
+                <span className="text-sm">Первичная продажа</span>
+              </label>
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="paymentType"
+                  checked={form.isRenewal}
+                  onChange={() => setForm({ ...form, isRenewal: true })}
+                  className="text-green-600"
+                />
+                <span className="text-sm">Продление</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors text-sm"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors text-sm font-medium"
+            >
+              {submitting ? 'Сохранение...' : 'Сохранить'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

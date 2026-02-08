@@ -119,4 +119,18 @@ export const api = {
 
   deleteTask: (taskId: string) =>
     request(`/tasks/${taskId}`, { method: 'DELETE' }),
+
+  // Payments
+  getClientPayments: (clientId: string) =>
+    request(`/clients/${clientId}/payments`),
+
+  createPayment: (clientId: string, data: { amount: number; month: string; isRenewal: boolean }) =>
+    request(`/clients/${clientId}/payments`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Renewals
+  getRenewals: (month: string) =>
+    request(`/renewals?month=${month}`),
 };

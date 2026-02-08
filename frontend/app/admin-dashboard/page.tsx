@@ -21,7 +21,7 @@ interface DashboardClient {
   fullName: string | null;
   companyName: string | null;
   phone: string;
-  email: string;
+  groupName: string | null;
   status: string;
   services: string[];
   createdAt: string;
@@ -229,7 +229,7 @@ export default function AdminDashboardPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           <div>{client.phone}</div>
-                          <div className="text-xs">{client.email}</div>
+                          <div className="text-xs">{client.groupName || ''}</div>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500">
                           {client.services?.join(', ') || '—'}

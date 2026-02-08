@@ -7,6 +7,7 @@ import { CommentsModule } from './modules/comments/comments.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { TasksModule } from './modules/tasks/tasks.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { TasksModule } from './modules/tasks/tasks.module';
     AuditModule,
     DashboardModule,
     TasksModule,
+    PaymentsModule,
   ],
 })
 export class AppModule {}

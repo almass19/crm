@@ -29,6 +29,14 @@ export default function Navbar() {
             >
               Задачи
             </Link>
+            {['ADMIN', 'SPECIALIST'].includes(user.role || '') && (
+              <Link
+                href="/renewals"
+                className="text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                Продлеваемые
+              </Link>
+            )}
             {['SPECIALIST', 'DESIGNER', 'SALES_MANAGER'].includes(user.role || '') && (
               <Link
                 href="/dashboard"

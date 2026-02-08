@@ -47,7 +47,7 @@ export class ClientsService {
         fullName: dto.fullName,
         companyName: dto.companyName,
         phone: dto.phone,
-        email: dto.email,
+        groupName: dto.groupName,
         services: dto.services,
         notes: dto.notes,
         paymentAmount: dto.paymentAmount,
@@ -69,12 +69,19 @@ export class ClientsService {
   async findAll(
     userRole: Role | null,
     userId: string,
-    search?: string,
-    status?: ClientStatus,
-    unassigned?: boolean,
+    filters: {
+      search?: string;
+      status?: ClientStatus;
+      unassigned?: boolean;
+      createdById?: string;
+      specialistId?: string;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+    },
   ) {
     const where: any = { archived: false };
 
+    // Role-based access restrictions
     if (userRole === Role.SPECIALIST) {
       where.assignedToId = userId;
     }
@@ -83,27 +90,45 @@ export class ClientsService {
       where.designerId = userId;
     }
 
-    if (search) {
+    // Search filter
+    if (filters.search) {
       where.OR = [
-        { fullName: { contains: search, mode: 'insensitive' } },
-        { companyName: { contains: search, mode: 'insensitive' } },
-        { phone: { contains: search } },
-        { email: { contains: search, mode: 'insensitive' } },
+        { fullName: { contains: filters.search, mode: 'insensitive' } },
+        { companyName: { contains: filters.search, mode: 'insensitive' } },
+        { phone: { contains: filters.search } },
+        { groupName: { contains: filters.search, mode: 'insensitive' } },
       ];
     }
 
-    if (status) {
-      where.status = status;
+    // Status filter
+    if (filters.status) {
+      where.status = filters.status;
     }
 
-    if (unassigned) {
+    // Unassigned filter
+    if (filters.unassigned) {
       where.assignedToId = null;
     }
+
+    // Filter by sales manager (admin only)
+    if (filters.createdById && userRole === Role.ADMIN) {
+      where.createdById = filters.createdById;
+    }
+
+    // Filter by specialist (admin only)
+    if (filters.specialistId && userRole === Role.ADMIN) {
+      where.assignedToId = filters.specialistId;
+    }
+
+    // Sorting
+    const validSortFields = ['createdAt', 'fullName', 'companyName', 'status', 'assignedAt'];
+    const sortBy = validSortFields.includes(filters.sortBy || '') ? filters.sortBy : 'createdAt';
+    const sortOrder = filters.sortOrder === 'asc' ? 'asc' : 'desc';
 
     const clients = await this.prisma.client.findMany({
       where,
       include: clientInclude,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { [sortBy!]: sortOrder },
     });
 
     return this.sanitizeClientsResponse(clients, userRole);

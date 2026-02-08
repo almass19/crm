@@ -47,6 +47,7 @@ model User {
   auditLogs       AuditLog[]
   createdTasks    Task[]              @relation("TaskCreator")
   assignedTasks   Task[]              @relation("TaskAssignee")
+  payments        Payment[]           @relation("PaymentManager")
 
   @@map("users")
 }
@@ -56,7 +57,7 @@ model Client {
   fullName    String?      @map("full_name")
   companyName String?      @map("company_name")
   phone       String
-  email       String
+  groupName   String?      @map("group_name")
   services      String[]
   notes         String?
   paymentAmount Decimal?     @map("payment_amount") @db.Decimal(12, 2)
@@ -84,6 +85,7 @@ model Client {
   comments          Comment[]
   auditLogs         AuditLog[]
   tasks             Task[]
+  payments          Payment[]
 
   @@map("clients")
 }
@@ -160,4 +162,21 @@ model Task {
   updatedAt DateTime  @updatedAt @map("updated_at")
 
   @@map("tasks")
+}
+
+model Payment {
+  id        String  @id @default(uuid())
+  amount    Int
+  month     String  // YYYY-MM format
+  isRenewal Boolean @default(false) @map("is_renewal")
+
+  clientId String @map("client_id")
+  client   Client @relation(fields: [clientId], references: [id])
+
+  managerId String @map("manager_id")
+  manager   User   @relation("PaymentManager", fields: [managerId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("payments")
 }

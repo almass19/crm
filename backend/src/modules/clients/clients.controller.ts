@@ -38,13 +38,23 @@ export class ClientsController {
     @Query('search') search?: string,
     @Query('status') status?: ClientStatus,
     @Query('unassigned') unassigned?: string,
+    @Query('createdById') createdById?: string,
+    @Query('specialistId') specialistId?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
   ) {
     return this.clientsService.findAll(
       user.role,
       user.id,
-      search,
-      status,
-      unassigned === 'true',
+      {
+        search,
+        status,
+        unassigned: unassigned === 'true',
+        createdById,
+        specialistId,
+        sortBy,
+        sortOrder,
+      },
     );
   }
 

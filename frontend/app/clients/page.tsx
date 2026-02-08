@@ -13,7 +13,7 @@ interface Client {
   fullName: string | null;
   companyName: string | null;
   phone: string;
-  email: string;
+  groupName: string | null;
   services: string[];
   status: string;
   assignmentSeen: boolean;
@@ -23,6 +23,20 @@ interface Client {
   assignedTo: { fullName: string } | null;
   designer: { fullName: string } | null;
 }
+
+interface UserOption {
+  id: string;
+  fullName: string;
+  role: string;
+}
+
+const SORT_OPTIONS = [
+  { value: 'createdAt:desc', label: 'Сначала новые' },
+  { value: 'createdAt:asc', label: 'Сначала старые' },
+  { value: 'fullName:asc', label: 'По имени А-Я' },
+  { value: 'fullName:desc', label: 'По имени Я-А' },
+  { value: 'status:asc', label: 'По статусу' },
+];
 
 export default function ClientsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -35,6 +49,15 @@ export default function ClientsPage() {
   const [activeTab, setActiveTab] = useState<'new' | 'inwork'>('new');
   const [showCreateModal, setShowCreateModal] = useState(false);
 
+  // New filter states
+  const [salesManagerFilter, setSalesManagerFilter] = useState('');
+  const [specialistFilter, setSpecialistFilter] = useState('');
+  const [sortOption, setSortOption] = useState('createdAt:desc');
+
+  // Users for filters (admin only)
+  const [salesManagers, setSalesManagers] = useState<UserOption[]>([]);
+  const [specialists, setSpecialists] = useState<UserOption[]>([]);
+
   const fetchClients = useCallback(async () => {
     if (!user) return;
     setLoading(true);
@@ -43,6 +66,14 @@ export default function ClientsPage() {
       if (search) params.search = search;
       if (statusFilter) params.status = statusFilter;
       if (showUnassigned) params.unassigned = 'true';
+      if (salesManagerFilter) params.createdById = salesManagerFilter;
+      if (specialistFilter) params.specialistId = specialistFilter;
+
+      // Parse sort option
+      const [sortBy, sortOrder] = sortOption.split(':');
+      params.sortBy = sortBy;
+      params.sortOrder = sortOrder;
+
       const data = await api.getClients(params);
       setClients(data);
     } catch {
@@ -50,7 +81,7 @@ export default function ClientsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, search, statusFilter, showUnassigned]);
+  }, [user, search, statusFilter, showUnassigned, salesManagerFilter, specialistFilter, sortOption]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -59,8 +90,21 @@ export default function ClientsPage() {
     }
     if (user) {
       fetchClients();
+      // Fetch filter options for admin
+      if (user.role === 'ADMIN') {
+        api.getUsers('sales_manager').then(setSalesManagers).catch(() => {});
+        api.getUsers('specialist').then(setSpecialists).catch(() => {});
+      }
     }
   }, [authLoading, user, fetchClients, router]);
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (user) fetchClients();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   if (authLoading || !user) {
     return (
@@ -101,6 +145,17 @@ export default function ClientsPage() {
         ? clients.filter((c) => !c.designerAssignmentSeen)
         : clients.filter((c) => c.designerAssignmentSeen)
       : clients;
+
+  const clearFilters = () => {
+    setSearch('');
+    setStatusFilter('');
+    setShowUnassigned(false);
+    setSalesManagerFilter('');
+    setSpecialistFilter('');
+    setSortOption('createdAt:desc');
+  };
+
+  const hasActiveFilters = search || statusFilter || showUnassigned || salesManagerFilter || specialistFilter || sortOption !== 'createdAt:desc';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -145,43 +200,102 @@ export default function ClientsPage() {
         )}
 
         {!isSpecialist && !isDesigner && (
-          <div className="flex flex-wrap gap-4 mb-6">
-            <input
-              type="text"
-              placeholder="Поиск по имени, телефону, email..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm min-w-[300px]"
-            />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-            >
-              <option value="">Все статусы</option>
-              {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-            {isAdmin && (
-              <label className="flex items-center space-x-2 text-sm text-gray-600">
+          <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+            {/* Search Row */}
+            <div className="flex flex-wrap gap-4 mb-4">
+              <div className="flex-1 min-w-[300px]">
                 <input
-                  type="checkbox"
-                  checked={showUnassigned}
-                  onChange={(e) => setShowUnassigned(e.target.checked)}
-                  className="rounded border-gray-300"
+                  type="text"
+                  placeholder="Поиск по имени, телефону, группе..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
-                <span>Только без специалиста</span>
-              </label>
-            )}
-            <button
-              onClick={fetchClients}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors text-sm"
-            >
-              Обновить
-            </button>
+              </div>
+              <select
+                value={sortOption}
+                onChange={(e) => setSortOption(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                {SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filters Row */}
+            <div className="flex flex-wrap gap-4 items-center">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value="">Все статусы</option>
+                {Object.entries(STATUS_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+
+              {isAdmin && (
+                <>
+                  <select
+                    value={salesManagerFilter}
+                    onChange={(e) => setSalesManagerFilter(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  >
+                    <option value="">Все менеджеры</option>
+                    {salesManagers.map((sm) => (
+                      <option key={sm.id} value={sm.id}>
+                        {sm.fullName}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={specialistFilter}
+                    onChange={(e) => setSpecialistFilter(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  >
+                    <option value="">Все специалисты</option>
+                    {specialists.map((sp) => (
+                      <option key={sp.id} value={sp.id}>
+                        {sp.fullName}
+                      </option>
+                    ))}
+                  </select>
+
+                  <label className="flex items-center space-x-2 text-sm text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={showUnassigned}
+                      onChange={(e) => setShowUnassigned(e.target.checked)}
+                      className="rounded border-gray-300"
+                    />
+                    <span>Без специалиста</span>
+                  </label>
+                </>
+              )}
+
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900"
+                >
+                  Сбросить фильтры
+                </button>
+              )}
+
+              <button
+                onClick={fetchClients}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors text-sm ml-auto"
+              >
+                Обновить
+              </button>
+            </div>
           </div>
         )}
 
@@ -202,7 +316,10 @@ export default function ClientsPage() {
                     Имя / Компания
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Контакты
+                    Телефон
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Группа
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Услуги
@@ -239,8 +356,10 @@ export default function ClientsPage() {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div>{client.phone}</div>
-                      <div className="text-xs">{client.email}</div>
+                      {client.phone}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {client.groupName || '—'}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {client.services?.join(', ') || '—'}
@@ -289,7 +408,7 @@ function CreateClientModal({
     fullName: '',
     companyName: '',
     phone: '',
-    email: '',
+    groupName: '',
     services: [] as string[],
     notes: '',
     paymentAmount: '',
@@ -314,7 +433,7 @@ function CreateClientModal({
       if (form.fullName) data.fullName = form.fullName;
       if (form.companyName) data.companyName = form.companyName;
       data.phone = form.phone;
-      data.email = form.email;
+      if (form.groupName) data.groupName = form.groupName;
       data.services = form.services;
       if (form.notes) data.notes = form.notes;
       if (form.paymentAmount) data.paymentAmount = parseFloat(form.paymentAmount);
@@ -396,15 +515,14 @@ function CreateClientModal({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email *
+                Название группы
               </label>
               <input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                required
+                type="text"
+                value={form.groupName}
+                onChange={(e) => setForm({ ...form, groupName: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="client@example.com"
+                placeholder="Название группы"
               />
             </div>
 
